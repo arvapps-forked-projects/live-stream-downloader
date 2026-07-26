@@ -418,11 +418,10 @@ chrome.runtime.onConnectExternal.addListener(eport => {
           value: job.initiator ? JSON.stringify({
             url: job.url,
             initiator: job.initiator
-          }) : job.url
+          }) : (job.url || job)
         })));
         eport.postMessage({
-          cmd: 'report',
-          value: 'interface is shown'
+          cmd: 'queued'
         });
       }
       else {

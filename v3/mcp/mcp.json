@@ -1,0 +1,174 @@
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      {
+        "name": "find_media",
+        "description": "Detect media content (videos, audio, images) from web pages. Can scan existing tabs or open new tabs and monitor for media in real-time.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "enum": ["find-media"],
+              "description": "Must be 'find-media'"
+            },
+            "tabId": {
+              "type": "integer",
+              "description": "ID of an existing tab to scan for media",
+              "optional": true
+            },
+            "query": {
+              "type": "object",
+              "description": "chrome.tabs.query argument to find or open a tab (e.g., {url: 'https://example.com'})",
+              "optional": true,
+              "additionalProperties": true
+            },
+            "open": {
+              "type": "boolean",
+              "description": "When true and query is provided, opens a new tab and streams media detections in real-time",
+              "optional": true
+            }
+          },
+          "required": ["cmd"]
+        },
+        "outputSchema": {
+          "type": "array",
+          "description": "Array containing media detection results or errors",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "Media detected response",
+                "properties": {
+                  "cmd": {
+                    "type": "string",
+                    "enum": ["media-detected"],
+                    "description": "Command identifier for media detection result"
+                  },
+                  "value": {
+                    "type": "object",
+                    "description": "Detected media information",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "description": "Direct URL to the media file"
+                      },
+                      "initiator": {
+                        "type": "string",
+                        "description": "Source URL that triggered the media load"
+                      }
+                    },
+                    "required": ["url"],
+                    "additionalProperties": true
+                  }
+                },
+                "required": ["cmd", "value"]
+              },
+              {
+                "type": "object",
+                "description": "Error response",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["error"],
+                    "description": "Indicates this is an error object",
+                    "optional": true
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "Human-readable error message"
+                  }
+                },
+                "required": ["message"]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "download_media",
+        "description": "Queue media files for download. Opens the downloader interface with the specified media items already added.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "enum": ["download-media"],
+              "description": "Must be 'download-media'"
+            },
+            "jobs": {
+              "type": "array",
+              "description": "Array of media items to download. Each item can be an object {url, initiator} or a URL string.",
+              "minItems": 1,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "description": "Media job with full context",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "description": "Direct URL to the media file"
+                      },
+                      "initiator": {
+                        "type": "string",
+                        "description": "Source URL that triggered the media load",
+                        "optional": true
+                      }
+                    },
+                    "required": ["url"]
+                  },
+                  {
+                    "type": "string",
+                    "description": "Media URL string (uses current tab as initiator)"
+                  }
+                ]
+              }
+            }
+          },
+          "required": ["cmd", "jobs"]
+        },
+        "outputSchema": {
+          "type": "array",
+          "description": "Array containing confirmation or error",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "Success confirmation",
+                "properties": {
+                  "cmd": {
+                    "type": "string",
+                    "enum": ["queued"],
+                    "description": "Indicates media was queued for download"
+                  }
+                },
+                "required": ["cmd"]
+              },
+              {
+                "type": "object",
+                "description": "Error response",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["error"],
+                    "description": "Indicates this is an error object",
+                    "optional": true
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "Human-readable error message"
+                  }
+                },
+                "required": ["message"]
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

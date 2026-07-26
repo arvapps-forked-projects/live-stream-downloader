@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": [{
+    "cmd": "media-detected",
+    "value": {
+      "url": "https://www.w3schools.com/html/mov_bbb.mp4",
+      "initiator": "https://www.w3schools.com/html/html5_video.asp"
+    }
+  }]
+}
+
+
+

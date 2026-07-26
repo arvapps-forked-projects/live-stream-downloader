@@ -81,6 +81,8 @@ Promise.all([
       }
     }
     catch (e) {
+      console.log(s);
+
       entries.set(s, {
         url: s
       });
