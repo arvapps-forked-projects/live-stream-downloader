@@ -31,9 +31,9 @@ const events = {
 
 document.title = 'Inspecting tab...';
 Promise.all([
-  extract.storage(tabId),
-  extract.performance(tabId),
-  extract.player(tabId)
+  tabId ? extract.storage(tabId) : [],
+  tabId ? extract.performance(tabId): [],
+  tabId ? extract.player(tabId) : []
 ]).then(async ([storageEntries, performanceEntries, playerEntries]) => {
   const entries = new Map();
   if (args.get('extra') === 'true') {
@@ -72,12 +72,19 @@ Promise.all([
   }
   catch (e) {}
 
-  // append
-  const append = args.get('append');
-  if (append && entries.has(append) === false) {
-    entries.set(append, {
-      url: append
-    });
+  // append: accepts both JSON and url as value
+  for (const s of args.getAll('append')) {
+    try {
+      const o = JSON.parse(s);
+      if (o.url) {
+        entries.set(o.url, o);
+      }
+    }
+    catch (e) {
+      entries.set(s, {
+        url: s
+      });
+    }
   }
 
   let forbiddens = 0;

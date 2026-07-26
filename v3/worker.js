@@ -17,13 +17,14 @@
     Homepage: https://webextension.org/listing/hls-downloader.html
 */
 
-/* global network */
+/* global network, extract */
 
 if (typeof importScripts !== 'undefined') {
   self.importScripts('network/core.js');
   self.importScripts('network/icon.js');
   self.importScripts('context.js');
   self.importScripts('/plugins/blob-detector/core.js');
+  self.importScripts('/data/job/extract.js');
 }
 
 self.notify = (tabId, text, title) => {
@@ -46,29 +47,30 @@ const extra = {};
 const open = async (tab, extra = []) => {
   const win = await chrome.windows.getCurrent();
 
-  chrome.storage.local.get({
+  const prefs = await chrome.storage.local.get({
     width: 800,
     height: 500 // for Windows we need this
-  }, prefs => {
-    const left = win.left + Math.round((win.width - 800) / 2);
-    const top = win.top + Math.round((win.height - 500) / 2);
+  });
+  const left = win.left + Math.round((win.width - 800) / 2);
+  const top = win.top + Math.round((win.height - 500) / 2);
 
-    const args = new URLSearchParams();
+  const args = new URLSearchParams();
+  if (tab) {
     args.set('tabId', tab.id);
     args.set('title', tab.title || '');
     args.set('href', tab.url || '');
-    for (const {key, value} of extra) {
-      args.set(key, value);
-    }
+  }
+  for (const {key, value} of extra) {
+    args.append(key, value);
+  }
 
-    chrome.windows.create({
-      url: '/data/job/index.html?' + args.toString(),
-      width: prefs.width,
-      height: prefs.height,
-      left,
-      top,
-      type: 'popup'
-    });
+  return chrome.windows.create({
+    url: '/data/job/index.html?' + args.toString(),
+    width: prefs.width,
+    height: prefs.height,
+    left,
+    top,
+    type: 'popup'
   });
 };
 chrome.action.onClicked.addListener(tab => open(tab));
@@ -134,7 +136,20 @@ const observe = d => {
     },
     func: (size, v) => {
       self.storage = self.storage || new Map();
+      self.ports = self.ports || new Set();
+      if (self.storage.has(v.url) === false) {
+        for (const port of self.ports) {
+          try {
+            port.postMessage({
+              cmd: 'media-detected',
+              value: v
+            });
+          }
+          catch (e) {}
+        }
+      }
       self.storage.set(v.url, v);
+
       if (self.storage.size > size) {
         for (const [href] of self.storage) {
           self.storage.delete(href);
@@ -289,6 +304,135 @@ chrome.alarms.onAlarm.addListener(a => {
     chrome.runtime.onStartup.addListener(once);
   }
 }
+
+/* cross-extension MCP support */
+chrome.runtime.onMessageExternal.addListener((request, sender, response) => {
+  if (request.cmd === 'mcp.json') {
+    fetch('mcp/mcp.json').then(r => r.json()).then(response);
+    return true;
+  }
+  else if (request.cmd === 'mcp.output') {
+    fetch('mcp/mcp.output').then(r => r.text()).then(response);
+    return true;
+  }
+  else {
+    response({
+      error: 'unknown-request'
+    });
+  }
+});
+
+/* external access */
+chrome.runtime.onConnectExternal.addListener(eport => {
+  eport.onMessage.addListener(async request => {
+    if (request.cmd === 'find-media') {
+      const find = async (opts = {}) => {
+        const {tabId, query, open} = opts;
+
+        if (tabId != null) {
+          return await chrome.tabs.get(tabId);
+        }
+
+        if (query && !open) {
+          const tabs = await chrome.tabs.query(query);
+
+          if (tabs.length) {
+            return tabs[0];
+          }
+        }
+
+        if (open && query?.url) {
+          return await chrome.tabs.create({
+            url: query.url
+          });
+        }
+
+        return null;
+      };
+      try {
+        const tab = await find(request);
+
+        const observe = iport => {
+          if (iport.sender.tab && iport.sender.tab.id === tab.id) {
+            iport.onMessage.addListener(request => eport.postMessage(request));
+            iport.onDisconnect.addListener(() => eport.disconnect());
+          }
+        };
+        chrome.runtime.onConnect.addListener(observe);
+
+        await chrome.scripting.executeScript({
+          target: {
+            tabId: tab.id,
+            allFrames: true
+          },
+          func: () => {
+            const port = chrome.runtime.connect({
+              name: 'page'
+            });
+            self.ports = self.ports || new Set();
+            self.ports.add(port);
+          }
+        });
+
+        const entries = new Map();
+        try {
+          for (const entry of await extract.player(tab.id)) {
+            entries.set(entry.url, entry);
+          }
+        }
+        catch (e) {}
+        try {
+          for (const entry of await extract.performance(tab.id)) {
+            entries.set(entry.url, entry);
+          }
+        }
+        catch (e) {}
+        // overwrite performanceEntries which does not include details
+        try {
+          for (const entry of await extract.storage(tab.id)) {
+            entries.set(entry.url, entry);
+          }
+        }
+        catch (e) {}
+
+        for (const value of entries.values()) {
+          eport.postMessage({
+            cmd: 'media-detected',
+            value
+          });
+        }
+
+        setTimeout(() => chrome.runtime.onConnect.removeListener(observe), 5000);
+      }
+      catch (e) {
+        console.error(e);
+        eport.postMessage({
+          error: e.message
+        });
+      }
+    }
+    else if (request.cmd === 'download-media') {
+      if (request.jobs) {
+        open(undefined, request.jobs.map(job => ({
+          key: 'append',
+          value: job.initiator ? JSON.stringify({
+            url: job.url,
+            initiator: job.initiator
+          }) : job.url
+        })));
+        eport.postMessage({
+          cmd: 'report',
+          value: 'interface is shown'
+        });
+      }
+      else {
+        eport.postMessage({
+          error: 'request must include "jobs" key'
+        });
+      }
+    }
+  });
+});
 
 /* FAQs & Feedback */
 {

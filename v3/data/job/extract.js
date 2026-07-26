@@ -155,7 +155,7 @@ extract.player = async tabId => {
         // sound manager
         try {
           for (const {url} of Object.values(self.soundManager.sounds)) {
-            console.log(new URL(url, location.href).href);
+            //console.log(new URL(url, location.href).href);
             list.push({
               initiator: location.href,
               url: new URL(url, location.href).href,
