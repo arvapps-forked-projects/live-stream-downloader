@@ -119,7 +119,7 @@ class MGet {
 
           if (segment) {
             const p = position - 1;
-            let retryCount = 3;
+            let retryCount = 10;
             while (retryCount > 0) {
               try {
                 let sm = { ...segment };
