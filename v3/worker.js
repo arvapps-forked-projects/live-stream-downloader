@@ -395,11 +395,22 @@ chrome.runtime.onConnectExternal.addListener(eport => {
         }
         catch (e) {}
 
-        for (const value of entries.values()) {
-          eport.postMessage({
-            cmd: 'media-detected',
-            value
-          });
+        if (entries.size) {
+          if (request.stream) {
+            for (const value of entries.values()) {
+              eport.postMessage({
+                cmd: 'media-detected',
+                value
+              });
+            }
+          }
+          else {
+            // Send all detected media to the agent at once
+            eport.postMessage([...entries.values()].map(value => ({
+              cmd: 'media-detected',
+              value
+            })));
+          }
         }
 
         setTimeout(() => chrome.runtime.onConnect.removeListener(observe), 5000);
