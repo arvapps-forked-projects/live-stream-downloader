@@ -246,24 +246,8 @@ network.types({
   chrome.storage.onChanged.addListener(ps => ps['mime-watch'] && run());
 }
 
-const raip = () => {
-  if (chrome.power) {
-    chrome.runtime.sendMessage({
-      method: 'any-active'
-    }, r => {
-      chrome.runtime.lastError;
-      if (r !== true) {
-        chrome.power.releaseKeepAwake();
-      }
-    });
-  }
-};
-
 chrome.runtime.onMessage.addListener((request, sender, response) => {
-  if (request.method === 'release-awake-if-possible') {
-    raip();
-  }
-  else if (request.method === 'get-extra') {
+  if (request.method === 'get-extra') {
     response(extra[request.tabId] || []);
     delete extra[request.tabId];
   }
@@ -274,11 +258,6 @@ chrome.runtime.onMessage.addListener((request, sender, response) => {
       tabId: sender.tab.id,
       initiator: sender.url
     });
-  }
-});
-chrome.alarms.onAlarm.addListener(a => {
-  if (a.name === 'release-awake-if-possible') {
-    raip();
   }
 });
 
